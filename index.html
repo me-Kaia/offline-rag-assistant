@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>私人 AI 助手</title>
+<style>
+:root{
+  --bg:#EDF0F4; --panel:#FFFFFF; --ink:#17202B; --muted:#5D6776; --line:#D5DBE3;
+  --accent:#3549C9; --accent-ink:#FFFFFF; --soft:#E4E8FB; --ok:#1E8556; --bad:#B23B2E;
+  --user:#1D2735; --user-ink:#F2F4F7; --code:#F1F3F7;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10151D; --panel:#18202A; --ink:#E5E9EF; --muted:#98A2B1; --line:#2A3341;
+    --accent:#8E9CFF; --accent-ink:#10151D; --soft:#232B44; --ok:#4CC38A; --bad:#F0806F;
+    --user:#2A3446; --user-ink:#E5E9EF; --code:#222A36;
+    color-scheme: dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans SC",system-ui,sans-serif;font-size:15px;line-height:1.65}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:300px 1fr;height:100%}
+aside{background:var(--panel);border-right:1px solid var(--line);padding:22px 18px;display:flex;flex-direction:column;gap:22px;overflow:auto}
+.brand{display:flex;gap:12px;align-items:center}
+.brand svg{width:42px;height:42px;color:var(--accent);flex:none}
+.brand h1{font-size:18px;margin:0;line-height:1.3;font-weight:700}
+.brand p{margin:0;font-size:13px;color:var(--muted)}
+.status{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:flex-start;background:var(--bg);border-radius:10px;padding:10px 12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none;margin-top:7px}
+.dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
+
+h2{font-size:14px;margin:0 0 8px;font-weight:700}
+.drop{display:block;border:1.5px dashed var(--line);border-radius:10px;padding:14px;text-align:center;font-size:13px;color:var(--muted);transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--soft);color:var(--ink)}
+.drop input{display:none}
+.files{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.files li{display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 6px;border-radius:6px}
+.files li:hover{background:var(--bg)}
+.files li span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.files li button{border:0;background:none;color:var(--muted);padding:0 4px;font-size:15px;line-height:1}
+.indexing{font-size:12px;color:var(--accent);margin-top:6px;min-height:18px}
+.linkbtn{border:0;background:none;color:var(--muted);font-size:12px;padding:0;text-decoration:underline}
+.quick{display:flex;flex-direction:column;gap:6px}
+.quick button{text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 12px;font-size:14px}
+.quick button:hover{border-color:var(--accent)}
+details summary{font-size:14px;font-weight:700;cursor:pointer}
+details label{display:block;font-size:12px;color:var(--muted);margin-top:10px}
+details input{width:100%;margin-top:3px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+details .save{margin-top:12px;border:0;background:var(--accent);color:var(--accent-ink);border-radius:6px;padding:6px 14px;font-size:13px}
+
+main{display:flex;flex-direction:column;min-width:0;height:100%}
+.top{display:flex;align-items:center;gap:14px;padding:14px 28px;border-bottom:1px solid var(--line);background:var(--panel)}
+.seg{display:inline-flex;background:var(--bg);border-radius:9px;padding:3px}
+.seg button{border:0;background:none;padding:5px 16px;border-radius:7px;font-size:14px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(20,30,50,.12)}
+.top .hint{font-size:13px;color:var(--muted)}
+.top .clear{margin-left:auto}
+
+.log{flex:1;overflow:auto;padding:28px}
+.inner{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.empty{margin-top:8vh}
+.empty h3{font-size:22px;margin:0 0 6px}
+.empty p{color:var(--muted);margin:0 0 16px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips button{border:1px solid var(--line);background:var(--panel);border-radius:18px;padding:6px 14px;font-size:14px}
+.chips button:hover{border-color:var(--accent);background:var(--soft)}
+
+.msg.user{align-self:flex-end;max-width:80%;background:var(--user);color:var(--user-ink);padding:10px 16px;border-radius:14px 14px 4px 14px;white-space:pre-wrap}
+.msg.ai{align-self:stretch}
+.msg.ai .body p{margin:0 0 10px}
+.msg.ai .body h4{margin:14px 0 6px;font-size:15px}
+.msg.ai .body ul,.msg.ai .body ol{margin:0 0 10px;padding-left:22px}
+.msg.ai .body code{background:var(--code);padding:1px 5px;border-radius:4px;font-size:13px}
+.tbl{overflow-x:auto;margin:6px 0 12px}
+table{border-collapse:collapse;font-size:14px;min-width:100%}
+th,td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+th{background:var(--bg)}
+.pending .body{color:var(--muted)}
+.pending .body::after{content:"";display:inline-block;width:1.2em;animation:dots 1.2s steps(4) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+.sources{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;font-size:12px;color:var(--muted);align-items:center}
+.sources span{background:var(--soft);color:var(--ink);border-radius:5px;padding:2px 8px}
+.meta{font-size:12px;color:var(--muted);margin-top:6px}
+.err{color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent);border-radius:8px;padding:10px 12px;font-size:14px}
+
+.composer{padding:14px 28px 20px;background:var(--bg)}
+.box{max-width:780px;margin:0 auto;display:flex;gap:10px;align-items:flex-end;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 10px 10px 16px}
+.box:focus-within{border-color:var(--accent)}
+.box textarea{flex:1;border:0;outline:0;background:none;resize:none;max-height:200px;min-height:26px;line-height:1.6;padding:2px 0}
+.send{border:0;background:var(--accent);color:var(--accent-ink);border-radius:10px;padding:7px 18px;font-weight:700;font-size:14px}
+.send.stop{background:var(--ink);color:var(--panel)}
+.send:disabled{opacity:.45;cursor:default}
+.foot{max-width:780px;margin:6px auto 0;font-size:12px;color:var(--muted)}
+
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto 1fr;height:auto;min-height:100%}
+  aside{border-right:0;border-bottom:1px solid var(--line)}
+  main{height:100vh}
+  .top,.log,.composer{padding-left:16px;padding-right:16px}
+  .top .hint{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">
+      <svg viewBox="0 0 40 40" aria-hidden="true">
+        <defs>
+          <clipPath id="wafer"><circle cx="20" cy="20" r="16.5"/></clipPath>
+          <pattern id="die" width="5" height="5" patternUnits="userSpaceOnUse"><rect x=".7" y=".7" width="3.6" height="3.6" rx=".6" fill="currentColor" opacity=".6"/></pattern>
+        </defs>
+        <circle cx="20" cy="20" r="18.2" fill="none" stroke="currentColor" stroke-width="1.6"/>
+        <rect x="2" y="2" width="36" height="36" fill="url(#die)" clip-path="url(#wafer)"/>
+      </svg>
+      <div>
+        <h1>私人 AI 助手</h1>
+        <p id="sub"></p>
+      </div>
+    </div>
+
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">正在连接本机模型</span></div>
+
+    <section>
+      <h2>资料库</h2>
+      <label class="drop" id="drop">拖入文件，或点这里添加<br>支持 .md 和 .txt
+        <input type="file" id="fileInput" multiple accept=".md,.txt,text/markdown,text/plain">
+      </label>
+      <div class="indexing" id="indexing"></div>
+      <ul class="files" id="files"></ul>
+      <button class="linkbtn" id="clearKb" hidden>清空资料库</button>
+    </section>
+
+    <section>
+      <h2>常用</h2>
+      <div class="quick">
+        <button id="qReport">生成本周质量周报</button>
+        <button id="qTranslate">翻译英文邮件并起草回复</button>
+        <button id="qEmail">帮我写一封邮件</button>
+      </div>
+    </section>
+
+    <details>
+      <summary>设置</summary>
+      <label>公司名称<input id="sName"></label>
+      <label>对话模型<input id="sChat"></label>
+      <label>向量模型<input id="sEmbed"></label>
+      <label>Ollama 地址<input id="sUrl"></label>
+      <button class="save" id="sSave">保存设置</button>
+    </details>
+  </aside>
+
+  <main>
+    <div class="top">
+      <div class="seg" role="group" aria-label="对话方式">
+        <button id="mKb" aria-pressed="true">查资料</button>
+        <button id="mFree" aria-pressed="false">自由对话</button>
+      </div>
+      <span class="hint" id="modeHint">每个问题都会先查资料库，回答会标出处</span>
+      <button class="linkbtn clear" id="newChat">新对话</button>
+    </div>
+    <div class="log" id="log"><div class="inner" id="inner"></div></div>
+    <div class="composer">
+      <div class="box">
+        <textarea id="input" rows="1" placeholder="输入问题，Enter 发送，Shift + Enter 换行"></textarea>
+        <button class="send" id="sendBtn">发送</button>
+      </div>
+      <div class="foot">模型在这台电脑上运行，断网也能用，文件和对话不会离开本机。</div>
+    </div>
+  </main>
+</div>
+
+<script>
+const CFG_KEY = 'boss-ai-cfg-v1', KB_KEY = 'boss-ai-kb-v1';
+const $ = id => document.getElementById(id);
+
+function load(k){ try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } }
+function save(k, v){
+  try { localStorage.setItem(k, JSON.stringify(v)); }
+  catch(e){ $('indexing').textContent = '浏览器存储已满，资料库只在本次打开期间有效'; }
+}
+
+const cfg = Object.assign({ name:'星芯微电子', chat:'qwen2.5:7b', embed:'bge-m3', url:'http://127.0.0.1:11434' }, load(CFG_KEY) || {});
+let kb = load(KB_KEY) || { files:[], chunks:[] };
+let mode = 'kb', history = [], controller = null;
+
+const SYSTEM_KB = () => `你是${cfg.name}总经理的私人 AI 助手，运行在这台电脑上，不联网。
+回答要求：
+1. 先用一句话给出结论，再分点说明依据，语言简洁，适合老板快速阅读。涉及异常时，同时说明直接原因和根本原因。
+2. 只根据提供的参考资料回答，在相关句子后用括号注明来源文件编号，例如（8D-2026-031）。
+3. 参考资料里没有的信息，直接说"资料中没有相关记录"，不要编造。`;
+const SYSTEM_FREE = () => `你是${cfg.name}总经理的私人 AI 助手，运行在这台电脑上，不联网。回答简洁，先说结论。写邮件时语气专业得体；翻译时准确使用半导体行业术语。`;
+const REPORT_PROMPT = `请把以上报告汇总成一份给总经理看的质量周报：
+1. 先用一句话概括本周整体情况。
+2. 用 Markdown 表格输出，列为：报告编号 | 问题 | 根因 | 措施 | 状态 | 需要老板决定的事。没有需要决定的事就写"无"。
+3. 最后列出需要关注的风险，不超过三条。
+只使用报告里的信息，不要编造。`;
+const EXAMPLES = ['TSV 侧壁粗糙历史上是怎么处理的？', 'ETCH-03 月保要做哪几项？哪些要停机？', '硅电容漏电流超标，先查哪些地方？'];
+
+/* ---------- Ollama ---------- */
+async function api(path, body, signal){
+  let r;
+  try {
+    r = await fetch(cfg.url + path, body ? { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), signal } : { signal });
+  } catch(e){
+    if (e.name === 'AbortError') throw e;
+    throw new Error('连不上本机的 Ollama。请确认 Ollama 正在运行，并已按说明设置 OLLAMA_ORIGINS 后重启 Ollama。');
+  }
+  if (!r.ok){
+    let msg = '';
+    try { msg = (await r.json()).error || ''; } catch(e){}
+    throw new Error(`Ollama 返回错误（${r.status}）${msg ? '：' + msg : ''}`);
+  }
+  return r;
+}
+async function checkOllama(){
+  const dot = $('dot'), txt = $('statusText');
+  try {
+    const j = await (await api('/api/tags')).json();
+    const names = (j.models || []).map(m => m.name);
+    const has = n => names.includes(n) || names.includes(n + ':latest');
+    const missing = [cfg.chat, cfg.embed].filter(n => !has(n));
+    if (missing.length){
+      dot.className = 'dot bad';
+      txt.textContent = `已连接，但缺少模型：${missing.join('、')}。在命令行运行 ollama pull ${missing[0]}`;
+    } else {
+      dot.className = 'dot ok';
+      txt.textContent = `本机模型已就绪：${cfg.chat}`;
+    }
+  } catch(e){
+    dot.className = 'dot bad';
+    txt.textContent = e.message;
+  }
+}
+async function embed(texts){
+  const j = await (await api('/api/embed', { model:cfg.embed, input:texts })).json();
+  if (!j.embeddings) throw new Error('向量模型没有返回结果，请确认已下载 ' + cfg.embed);
+  return j.embeddings;
+}
+async function streamChat(messages, onToken, signal){
+  const r = await api('/api/chat', { model:cfg.chat, messages, stream:true, options:{ num_ctx:8192, temperature:0.3 } }, signal);
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  let buf = '';
+  for(;;){
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream:true });
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0){
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line) continue;
+      const j = JSON.parse(line);
+      if (j.error) throw new Error(j.error);
+      if (j.message && j.message.content) onToken(j.message.content);
+    }
+  }
+}
+
+/* ---------- 资料库 ---------- */
+const base = n => n.replace(/\.(md|txt)$/i, '');
+function chunkFile(name, text){
+  const title = ((text.match(/^#\s+(.+)$/m) || [])[1] || base(name)).trim();
+  const out = [];
+  for (const part of text.split(/\n(?=##\s)/)){
+    let s = part.trim();
+    if (!s) continue;
+    while (s.length > 900){ out.push(s.slice(0, 900)); s = s.slice(800); }
+    out.push(s);
+  }
+  return out.map(t => ({ file:name, text: t.startsWith('# ') ? t : `【${title}】\n${t}` }));
+}
+async function addFiles(list){
+  const files = [...list].filter(f => /\.(md|txt)$/i.test(f.name));
+  if (!files.length){ $('indexing').textContent = '目前只支持 .md 和 .txt 文件'; return; }
+  try {
+    for (const f of files){
+      const text = await f.text();
+      const chunks = chunkFile(f.name, text);
+      const embs = [];
+      for (let i = 0; i < chunks.length; i += 8){
+        $('indexing').textContent = `正在读取 ${base(f.name)}（${Math.min(i + 8, chunks.length)}/${chunks.length}）`;
+        embs.push(...await embed(chunks.slice(i, i + 8).map(c => c.text)));
+      }
+      chunks.forEach((c, i) => c.emb = embs[i].map(v => +v.toFixed(5)));
+      kb.files = kb.files.filter(x => x.name !== f.name);
+      kb.chunks = kb.chunks.filter(c => c.file !== f.name);
+      kb.files.push({ name:f.name, text });
+      kb.chunks.push(...chunks);
+    }
+    save(KB_KEY, kb);
+    $('indexing').textContent = `已添加 ${files.length} 个文件`;
+  } catch(e){
+    $('indexing').textContent = e.message;
+  }
+  renderFiles();
+}
+function removeFile(name){
+  kb.files = kb.files.filter(f => f.name !== name);
+  kb.chunks = kb.chunks.filter(c => c.file !== name);
+  save(KB_KEY, kb); renderFiles();
+}
+function renderFiles(){
+  const ul = $('files'); ul.innerHTML = '';
+  kb.files.forEach(f => {
+    const li = document.createElement('li');
+    const s = document.createElement('span'); s.textContent = base(f.name); s.title = f.name;
+    const b = document.createElement('button'); b.textContent = '×'; b.title = '移除'; b.setAttribute('aria-label', '移除 ' + f.name);
+    b.onclick = () => removeFile(f.name);
+    li.append(s, b); ul.append(li);
+  });
+  $('clearKb').hidden = !kb.files.length;
+}
+function cos(a, b){
+  let d = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++){ d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+  return d / (Math.sqrt(na * nb) || 1);
+}
+async function retrieve(q, k = 4){
+  const [qe] = await embed([q]);
+  return kb.chunks.map(c => ({ c, s:cos(qe, c.emb) })).sort((a, b) => b.s - a.s).slice(0, k);
+}
+
+/* ---------- 显示 ---------- */
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
+const isList = l => /^\s*([-*]|\d+[.)、])\s+/.test(l);
+function md(src){
+  const lines = src.split('\n'); let html = '', i = 0;
+  while (i < lines.length){
+    const l = lines[i];
+    if (/^\s*\|/.test(l)){
+      const rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++]);
+      const cells = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+      const body = rows.filter(r => r.replace(/[\s|:-]/g, '') !== '');
+      html += '<div class="tbl"><table>' + body.map((r, ri) => '<tr>' + cells(r).map(c => ri ? `<td>${inline(c)}</td>` : `<th>${inline(c)}</th>`).join('') + '</tr>').join('') + '</table></div>';
+      continue;
+    }
+    const h = l.match(/^#{1,4}\s+(.*)/);
+    if (h){ html += `<h4>${inline(h[1])}</h4>`; i++; continue; }
+    if (isList(l)){
+      const tag = /^\s*\d/.test(l) ? 'ol' : 'ul'; let t = `<${tag}>`;
+      while (i < lines.length && isList(lines[i])) t += '<li>' + inline(lines[i++].replace(/^\s*([-*]|\d+[.)、])\s+/, '')) + '</li>';
+      html += t + `</${tag}>`; continue;
+    }
+    if (!l.trim()){ i++; continue; }
+    const p = [];
+    while (i < lines.length && lines[i].trim() && !/^\s*\|/.test(lines[i]) && !/^#{1,4}\s/.test(lines[i]) && !isList(lines[i])) p.push(inline(lines[i++]));
+    html += '<p>' + p.join('<br>') + '</p>';
+  }
+  return html;
+}
+function scrollDown(){ const log = $('log'); log.scrollTop = log.scrollHeight; }
+function renderEmpty(){
+  const inner = $('inner'); inner.innerHTML = '';
+  const d = document.createElement('div'); d.className = 'empty';
+  d.innerHTML = mode === 'kb'
+    ? '<h3>今天想查点什么？</h3><p>问一个跟厂里资料有关的问题，回答会标出来自哪份文件。</p>'
+    : '<h3>今天想做点什么？</h3><p>写邮件、翻译、整理想法都可以。这个模式不查资料库。</p>';
+  if (mode === 'kb'){
+    const chips = document.createElement('div'); chips.className = 'chips';
+    EXAMPLES.forEach(q => { const b = document.createElement('button'); b.textContent = q; b.onclick = () => send(q); chips.append(b); });
+    d.append(chips);
+  }
+  inner.append(d);
+}
+function addMsg(role, text){
+  const empty = $('inner').querySelector('.empty'); if (empty) empty.remove();
+  const el = document.createElement('div'); el.className = 'msg ' + role;
+  const body = document.createElement('div'); body.className = 'body';
+  if (role === 'user') body.textContent = text; else body.textContent = text;
+  el.append(body); $('inner').append(el); scrollDown();
+  return { el, body };
+}
+function setBusy(b){
+  const btn = $('sendBtn');
+  btn.textContent = b ? '停止' : '发送';
+  btn.classList.toggle('stop', b);
+}
+
+/* ---------- 发送 ---------- */
+async function send(text, opts = {}){
+  if (controller){ controller.abort(); return; }
+  text = (text || '').trim(); if (!text) return;
+  $('input').value = ''; autosize();
+  addMsg('user', text);
+  const m = addMsg('ai', '正在准备'); m.el.classList.add('pending');
+  controller = new AbortController(); setBusy(true);
+  let out = '', sources = [];
+  const t0 = performance.now();
+  try {
+    let messages;
+    if (opts.report){
+      const docs = kb.files.filter(f => /8D/i.test(f.name));
+      if (!docs.length) throw new Error('资料库里还没有 8D 报告。先在左侧添加文件。');
+      sources = docs.map(d => base(d.name));
+      const ctx = docs.map(d => `《${base(d.name)}》\n${d.text}`).join('\n\n---\n\n');
+      messages = [{ role:'system', content:SYSTEM_KB() }, { role:'user', content:`以下是本周的异常报告全文：\n\n${ctx}\n\n${REPORT_PROMPT}` }];
+    } else if (mode === 'kb'){
+      if (!kb.chunks.length) throw new Error('资料库还是空的。先在左侧添加文件，或切换到"自由对话"。');
+      m.body.textContent = '正在查资料';
+      const hits = await retrieve(text);
+      sources = [...new Set(hits.map(h => base(h.c.file)))];
+      const ctx = hits.map((h, i) => `[资料${i + 1}] 来自《${base(h.c.file)}》\n${h.c.text}`).join('\n\n');
+      messages = [{ role:'system', content:SYSTEM_KB() }, { role:'user', content:`参考资料：\n${ctx}\n\n问题：${text}\n\n请只根据参考资料回答，并注明来源文件编号。` }];
+    } else {
+      messages = [{ role:'system', content:SYSTEM_FREE() }, ...history.slice(-6), { role:'user', content:text }];
+    }
+    m.body.textContent = '正在思考';
+    await streamChat(messages, tok => {
+      if (!out) m.el.classList.remove('pending');
+      out += tok; m.body.innerHTML = md(out); scrollDown();
+    }, controller.signal);
+    if (mode === 'free' && !opts.report) history.push({ role:'user', content:text }, { role:'assistant', content:out });
+    finish(m, sources, t0, false);
+  } catch(e){
+    m.el.classList.remove('pending');
+    if (e.name === 'AbortError'){
+      if (!out) m.body.textContent = '';
+      finish(m, sources, t0, true);
+    } else {
+      m.body.innerHTML = `<div class="err">${esc(e.message)}</div>`;
+    }
+  } finally {
+    controller = null; setBusy(false); $('input').focus();
+  }
+}
+function finish(m, sources, t0, stopped){
+  if (sources.length){
+    const s = document.createElement('div'); s.className = 'sources';
+    s.append('参考文件');
+    sources.forEach(n => { const t = document.createElement('span'); t.textContent = n; s.append(t); });
+    m.el.append(s);
+  }
+  const meta = document.createElement('div'); meta.className = 'meta';
+  meta.textContent = (stopped ? '已停止，' : '') + `用时 ${((performance.now() - t0) / 1000).toFixed(1)} 秒，本机生成`;
+  m.el.append(meta); scrollDown();
+}
+
+/* ---------- 交互 ---------- */
+function setMode(x){
+  mode = x;
+  $('mKb').setAttribute('aria-pressed', x === 'kb');
+  $('mFree').setAttribute('aria-pressed', x === 'free');
+  $('modeHint').textContent = x === 'kb' ? '每个问题都会先查资料库，回答会标出处' : '不查资料库，适合写邮件、翻译';
+  if (!$('inner').querySelector('.msg')) renderEmpty();
+}
+function autosize(){ const t = $('input'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 200) + 'px'; }
+function prefill(text){ setMode('free'); const t = $('input'); t.value = text; autosize(); t.focus(); t.setSelectionRange(text.length, text.length); }
+function renderBrand(){ $('sub').textContent = `${cfg.name}总经理专用`; document.title = `${cfg.name} 私人 AI 助手`; }
+
+$('mKb').onclick = () => setMode('kb');
+$('mFree').onclick = () => setMode('free');
+$('newChat').onclick = () => { if (controller) controller.abort(); history = []; renderEmpty(); };
+$('sendBtn').onclick = () => send($('input').value);
+$('input').addEventListener('input', autosize);
+$('input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); send($('input').value); }
+});
+$('fileInput').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+$('clearKb').onclick = () => { if (confirm('清空资料库里的所有文件？')){ kb = { files:[], chunks:[] }; save(KB_KEY, kb); renderFiles(); $('indexing').textContent = ''; } };
+$('qReport').onclick = () => send('生成本周质量周报', { report:true });
+$('qTranslate').onclick = () => prefill('把下面这封英文邮件翻译成中文，并起草一封简短得体的英文回复：\n\n');
+$('qEmail').onclick = () => prefill('帮我写一封邮件，收件人是：\n要说的事情是：\n');
+
+['Name', 'Chat', 'Embed', 'Url'].forEach(k => $('s' + k).value = cfg[k.toLowerCase()]);
+$('sSave').onclick = () => {
+  const oldEmbed = cfg.embed;
+  ['Name', 'Chat', 'Embed', 'Url'].forEach(k => cfg[k.toLowerCase()] = $('s' + k).value.trim() || cfg[k.toLowerCase()]);
+  cfg.url = cfg.url.replace(/\/+$/, '');
+  save(CFG_KEY, cfg); renderBrand(); checkOllama();
+  if (cfg.embed !== oldEmbed && kb.files.length) $('indexing').textContent = '换了向量模型，请清空资料库后重新添加文件';
+};
+
+renderBrand(); renderFiles(); renderEmpty(); checkOllama();
+</script>
+</body>
+</html>
